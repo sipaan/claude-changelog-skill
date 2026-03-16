@@ -10,6 +10,7 @@ A Claude Code skill that generates user-facing changelog entries from git commit
 - Groups all changes from the same day into one release (daily grouping)
 - Detects INSERT mode (new release) vs UPDATE mode (same-day merge)
 - Creates changelog type definitions and data file for new projects
+- Sorts changes by category priority (Feature → Design → Improvement → Fix)
 - Supports `--preview` to see changes without writing
 
 ## Example
@@ -36,14 +37,14 @@ The skill generates:
       impact: 'minor'
     },
     {
-      type: 'fix',
-      description: 'Fixed thumbnail synchronization for smoother loading',
-      impact: 'patch'
-    },
-    {
       type: 'design',
       description: 'Refreshed button design with modern styling',
       impact: 'minor'
+    },
+    {
+      type: 'fix',
+      description: 'Fixed thumbnail synchronization for smoother loading',
+      impact: 'patch'
     }
   ]
 }

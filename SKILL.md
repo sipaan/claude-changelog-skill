@@ -171,7 +171,30 @@ feat: Implement JWT refresh token rotation
 }
 ```
 
-### Order changes by importance: Features → Improvements → Design → Fixes
+### Order changes by priority (most → least important)
+
+Changes within each release **must** be sorted by category importance so users see the most impactful items first:
+
+1. **feature** — New capabilities (highest priority)
+2. **design** — Visual/UX redesigns
+3. **improvement** — Enhancements to existing features
+4. **fix** — Bug fixes (lowest priority)
+
+This ordering applies both when generating the data and when rendering in the UI. If your display component receives unsorted data, sort at render time:
+
+```typescript
+const changeTypePriority: Record<ChangeType, number> = {
+  feature: 0,
+  design: 1,
+  improvement: 2,
+  fix: 3,
+}
+
+// Sort before rendering
+const sorted = [...release.changes].sort(
+  (a, b) => changeTypePriority[a.type] - changeTypePriority[b.type]
+)
+```
 
 ### Summary generation:
 - 2+ features → combine top two: "Dark mode and CSV export"
