@@ -1,121 +1,66 @@
 ---
 name: changelog
-description: Generate user-facing changelog entries from git commits with semantic versioning and daily grouping. Translates technical commits into clear, user-friendly descriptions for a TypeScript changelog data file. Use this skill when the user asks to update the changelog, document recent changes, prepare a release, or after finishing a series of commits. Also use when you detect significant work has been completed and changes should be logged — in that case, propose entries and ask for confirmation before writing.
+description: Generate user-facing changelog entries from git commits with semantic versioning and daily grouping. Translates technical commits into clear, user-friendly descriptions for a TypeScript changelog data file. Use this skill when the user asks to update the changelog, document recent changes, prepare a release, or after finishing a series of commits. Also use when you detect significant work has been completed and changes should be logged - in that case, propose entries and ask for confirmation before writing.
 argument-hint: "[--preview] [day|week|month|<N>d|--since-tag <tag>]"
 ---
 
 # Changelog Generator
 
-Generate **user-facing changelog entries** from git commits. Outputs structured TypeScript data that apps render in a "What's New" modal or similar UI.
+Generate **user-facing changelog entries** from git commits. Uses a hybrid architecture: a deterministic bash script handles mechanical work (commit range, filtering, version calculation), Claude handles creative work (translation, consolidation, summary).
 
-## Core Behavior
+## Architecture
 
-- Read git commits since the last changelog entry
-- Parse conventional commit prefixes to categorize changes
-- Translate technical language into plain, user-friendly descriptions
-- Calculate semantic version based on change impact
-- Group all changes from the same day into one release
-- Write structured TypeScript to the project's changelog data file
-- **When auto-invoked (not triggered by user):** propose the entries and ask for confirmation before writing
+```
+changelog-prep.sh (deterministic)    SKILL.md (Claude)
+┌──────────────────────────┐         ┌──────────────────────────┐
+│ Commit boundary (SHA)    │         │ Translate to plain English│
+│ Filter by prefix         │ ─────>  │ Consolidate duplicates   │
+│ Calculate version        │ stdout  │ Cross-release dedup      │
+│ INSERT vs UPDATE mode    │         │ Merge existing (UPDATE)  │
+│ Structured manifest      │         │ Write changelog.ts       │
+└──────────────────────────┘         └──────────────────────────┘
+```
 
-## Step 1: Locate the Changelog
+## Step 1: Run the Prep Script
 
-Search the project for the changelog data file. Check these locations in order:
-
-1. `src/data/changelog.ts`
-2. `data/changelog.ts`
-3. Any `.ts` file containing `changelogReleases` (use grep)
-
-If no changelog file exists, ask the user if they want to create one. If yes, create both the data file and type definitions (see "Creating a New Changelog" below).
-
-## Step 2: Read the Last Entry
-
-From the changelog data file, extract:
-- **Last version** (e.g., `1.3.2`)
-- **Last date** (e.g., `2025-10-19`)
-
-These determine whether to INSERT a new release or UPDATE today's existing one.
-
-## Step 3: Determine the Commit Range
-
-**Default (no arguments):** Get commits since the last changelog date.
+Run the `changelog-prep.sh` script located in the same directory as this skill file. Pass through any user-provided arguments.
 
 ```bash
-git log --since="LAST_DATE 00:00" --pretty=format:'%h|%as|%s' --no-merges --reverse
+bash <skill-directory>/changelog-prep.sh [arguments]
 ```
 
-**With time argument:**
-- `day` → `--since='1 day ago'`
-- `week` → `--since='1 week ago'`
-- `month` → `--since='1 month ago'`
-- `<N>d` (e.g., `3d`) → `--since='N days ago'`
-- `--since-tag <tag>` → commits since that git tag
-
-If no commits are found: "No new commits since last changelog entry. You're all caught up!"
-
-## Step 4: Daily Grouping (UPDATE vs INSERT)
-
-**One release per day.** Compare the last entry's date with today:
-
-- **Last date === today → UPDATE MODE**: Replace today's existing entry with a cumulative one containing all changes
-- **Last date !== today → INSERT MODE**: Create a new entry at the beginning of the array
-
-This prevents multiple releases on the same day and keeps the changelog clean.
-
-## Step 5: Filter Commits
-
-### Include (user-visible changes):
-
-| Prefix | Change Type | Impact |
-|--------|------------|--------|
-| `feat:` | `feature` | `minor` |
-| `fix:` | `fix` | `patch` |
-| `perf:` | `improvement` | `patch` |
-| `refactor:` (with user impact) | `improvement` | `patch` |
-| `style:`, `ui:`, `design:` | `design` | `minor` |
-
-### Exclude (not user-visible):
-
-- `docs:` — documentation (unless user-facing help/guides)
-- `test:` — test changes
-- `chore:` — maintenance, dependencies
-- `refactor:` — code restructuring (unless it changes user experience)
-- `WIP:` — work in progress
-- Merge commits
-- `chore: auto-update` or similar automated commits
-- File operation commits (`add files via upload`, `delete filename.ts`)
-
-**Exception:** If an excluded commit has clear user-visible impact, include it.
-
-## Step 6: Anti-Duplication
-
-When multiple commits describe the same feature or change in the same release, consolidate them into a single entry.
-
-**Detection rule:** If commit A introduces feature X, and commit B modifies/redesigns/fixes feature X in the same release, merge them into ONE entry describing the complete feature.
-
-Example:
+Parse the manifest output. The format is:
 ```
-feat: Add dark mode toggle
-fix: Fix dark mode not persisting
-ui: Improve dark mode transition
-→ ONE entry: "Dark mode with smooth transitions and persistent preferences"
+CHANGELOG_FILE=<path>
+MODE=INSERT|UPDATE
+LAST_VERSION=X.Y.Z
+NEW_VERSION=X.Y.Z
+BUMP=major|minor|patch
+TODAY=YYYY-MM-DD
+LAST_DATE=YYYY-MM-DD
+BOUNDARY_SHA=<sha>
+PREVIEW=true|false
+===INCLUDED===
+<hash>|<date>|<commit message>
+...
+===REVIEW===
+<hash>|<date>|<commit message>
+...
+===END===
 ```
 
-## Step 7: Calculate Semantic Version
+**If the output starts with `ERROR=`:** Display the error message to the user and stop.
 
-Parse the last version into MAJOR.MINOR.PATCH, then:
+## Step 2: Review Borderline Commits
 
-- **MAJOR bump** (`X+1.0.0`): Commit contains `BREAKING CHANGE` or uses `!:` (e.g., `feat!:`)
-- **MINOR bump** (`X.Y+1.0`): Has `feat:`, `style:`, `ui:`, or `design:` commits
-- **PATCH bump** (`X.Y.Z+1`): Only `fix:`, `perf:`, `refactor:` commits
+The REVIEW section contains `refactor:` commits that may or may not be user-visible.
 
-In UPDATE MODE, version increments cumulatively from the existing today's version.
+For each commit in REVIEW:
+- **Does it change what users see or experience?** (e.g., faster loading, different layout, changed behavior)
+- If yes: include it as type `improvement`
+- If no: discard it (internal restructuring only)
 
-**Daily cumulative example:** Starting from v1.2.1:
-- Morning: feat (→ v1.3.0) + Afternoon: fix (→ v1.3.1) + Evening: feat (→ v1.4.0)
-- Result: Single release **v1.4.0** with all changes
-
-## Step 8: Translate to User-Friendly Language
+## Step 3: Translate to User-Friendly Language
 
 Users see this changelog in the app. Write for humans, not developers.
 
@@ -124,6 +69,15 @@ Users see this changelog in the app. Write for humans, not developers.
 - Use past tense: "Added", "Fixed", "Improved"
 - Target 10-20 words per description
 - Be specific and concrete
+
+### Commit prefix to change type mapping:
+| Prefix | Change Type |
+|--------|------------|
+| `feat:` | `feature` |
+| `fix:` | `fix` |
+| `perf:` | `improvement` |
+| `refactor:` (user-visible) | `improvement` |
+| `style:`, `ui:`, `design:` | `design` |
 
 ### DO NOT mention:
 - Component names (e.g., `PhotoGrid`, `UserModal`, `Sidebar`)
@@ -137,78 +91,121 @@ Users see this changelog in the app. Write for humans, not developers.
 
 ```
 feat: Add TanStack Virtual to PhotoGrid component
-→ "High-performance rendering for large photo collections"
+-> "High-performance rendering for large photo collections"
 
 fix: Resolve Zustand reactivity bug in cacheStore
-→ "Fixed thumbnail synchronization for smoother loading"
+-> "Fixed thumbnail synchronization for smoother loading"
 
 perf: Optimize LRU cache eviction strategy
-→ "Faster thumbnail loading with improved memory usage"
+-> "Faster thumbnail loading with improved memory usage"
 
 style: Update HeroUI Button design tokens
-→ "Refreshed button design with modern styling"
+-> "Refreshed button design with modern styling"
 
 feat: Implement JWT refresh token rotation
-→ "Longer login sessions without interruptions"
+-> "Longer login sessions without interruptions"
 ```
 
-## Step 9: Generate the Entry
+## Step 4: Anti-Duplication (Within Release)
 
-### TypeScript structure:
+When multiple commits describe the same feature or change, consolidate them into a single entry.
+
+**Detection rule:** If commit A introduces feature X, and commit B modifies/redesigns/fixes feature X, merge them into ONE entry describing the complete feature.
+
+Example:
+```
+feat: Add dark mode toggle
+fix: Fix dark mode not persisting
+ui: Improve dark mode transition
+-> ONE entry: "Dark mode with smooth transitions and persistent preferences"
+```
+
+## Step 5: Cross-Release Deduplication
+
+**CRITICAL: This prevents the duplicate bug.**
+
+Read the **previous release's** entries from the changelog file. For each candidate new entry, check if it describes the same user-visible change as an existing entry in the prior release.
+
+If a candidate is semantically the same as a previous release entry: **exclude it**.
+
+This catches edge cases where commits straddle changelog updates on the same day. The prep script's commit-SHA boundary prevents most duplicates, but this is the safety net.
+
+## Step 6: Merge Logic (UPDATE Mode Only)
+
+When `MODE=UPDATE`, today's entry already exists in the changelog. Preserve manual edits:
+
+1. Read the existing today's entry from the changelog file
+2. For each existing entry, try to match it to a commit in the INCLUDED list (by semantic similarity - does the existing description correspond to this commit?)
+3. **Matched entries:** keep the existing description (the user may have hand-edited it)
+4. **Unmatched existing entries:** preserve as-is (these are manual additions)
+5. **New commits with no matching existing entry:** translate and add as new entries
+6. Sort the final list by priority: feature -> design -> improvement -> fix
+
+In INSERT mode, skip this step entirely - just use the translated entries.
+
+## Step 7: Impact Classification
+
+Each change needs an `impact` field:
+
+### `minor` impact - notable changes users will notice:
+- New features and capabilities
+- Significant UI/UX improvements
+- Major design changes
+
+### `patch` impact - smaller changes:
+- Bug fixes
+- Minor polish and tweaks
+- Performance improvements
+- Small UI adjustments
+
+### `major` impact - rare, breaking changes:
+- Complete UI overhauls
+- Removed features
+- Fundamental workflow changes
+
+## Step 8: Generate Summary
+
+- 2+ features: combine top two - "Dark mode and CSV export"
+- 1 feature: use its description
+- No features, has improvements/fixes: "Performance and stability improvements"
+- Only design: "Design and visual improvements"
+
+## Step 9: Order Changes by Priority
+
+Changes within each release **must** be sorted:
+
+1. **feature** - New capabilities (highest priority)
+2. **design** - Visual/UX redesigns
+3. **improvement** - Enhancements to existing features
+4. **fix** - Bug fixes (lowest priority)
+
+## Step 10: Generate TypeScript Entry
 
 ```typescript
 {
-  version: 'X.Y.Z',
-  date: 'YYYY-MM-DD',
-  summary: 'Brief highlight of key changes',
+  version: 'X.Y.Z',       // NEW_VERSION from manifest
+  date: 'YYYY-MM-DD',     // TODAY from manifest
+  summary: '...',          // From Step 8
   changes: [
     {
       type: 'feature',        // 'feature' | 'fix' | 'improvement' | 'design'
-      description: '...',     // User-friendly description
+      description: '...',     // User-friendly description from Step 3
       impact: 'minor'         // 'major' | 'minor' | 'patch'
     }
   ]
 }
 ```
 
-### Order changes by priority (most → least important)
+## Step 11: Write to File
 
-Changes within each release **must** be sorted by category importance so users see the most impactful items first:
-
-1. **feature** — New capabilities (highest priority)
-2. **design** — Visual/UX redesigns
-3. **improvement** — Enhancements to existing features
-4. **fix** — Bug fixes (lowest priority)
-
-This ordering applies both when generating the data and when rendering in the UI. If your display component receives unsorted data, sort at render time:
-
-```typescript
-const changeTypePriority: Record<ChangeType, number> = {
-  feature: 0,
-  design: 1,
-  improvement: 2,
-  fix: 3,
-}
-
-// Sort before rendering
-const sorted = [...release.changes].sort(
-  (a, b) => changeTypePriority[a.type] - changeTypePriority[b.type]
-)
-```
-
-### Summary generation:
-- 2+ features → combine top two: "Dark mode and CSV export"
-- 1 feature → use its description
-- No features, has improvements/fixes → "Performance and stability improvements"
-- Only design → "Design and visual improvements"
-
-## Step 10: Write to File
+### If `PREVIEW=true`:
+Show what would be written but do NOT modify any files. Display version calculation, mode, changes, and summary.
 
 ### INSERT MODE (new day):
 Add the new entry at the beginning of the `changelogReleases` array, right after the opening `[`.
 
 ### UPDATE MODE (same day):
-Replace the first entry in the array (today's existing entry) with the new cumulative one.
+Replace the first entry in the array (today's existing entry) with the merged result from Step 6.
 
 ### Validation before writing:
 - TypeScript syntax is valid
@@ -217,26 +214,22 @@ Replace the first entry in the array (today's existing entry) with the new cumul
 - All single quotes properly escaped in descriptions
 - Change types are valid (`feature`, `fix`, `improvement`, `design`)
 
-## Step 11: Output
-
-### If `--preview` flag is set:
-Show what would be written but do NOT modify any files. Display version calculation, changes, and summary.
+## Step 12: Output
 
 ### INSERT MODE output:
 ```
 Changelog updated!
 
 Mode: INSERT (new release)
-Version: v1.4.0 (MINOR bump — new features)
-Date: 2025-10-20
-Summary: Grid zoom controls and faster thumbnail loading
+Version: vX.Y.Z (BUMP_TYPE bump - reason)
+Date: YYYY-MM-DD
+Summary: ...
 
 Changes:
-1. feature: Zoom controls to adjust photo card size
-2. fix: Eliminated thumbnail flashing during navigation
-3. design: Improved button spacing for cleaner layout
+1. type: description
+2. type: description
 
-File updated: src/data/changelog.ts
+File updated: <path>
 ```
 
 ### UPDATE MODE output:
@@ -244,21 +237,20 @@ File updated: src/data/changelog.ts
 Changelog updated!
 
 Mode: UPDATE (merged into today's release)
-Version: v1.4.1 (cumulative for today)
-Date: 2025-10-20
+Version: vX.Y.Z (cumulative for today)
+Date: YYYY-MM-DD
 
 Change diff:
-+ ADDED: Fixed zoom button positioning
-~ MERGED: "Grid zoom" + "Zoom fix" → consolidated entry
-= KEPT: Improved button spacing for cleaner layout
++ ADDED: new entries from recent commits
+~ MERGED: consolidated entries
+= KEPT: preserved manual edits
 
-File updated: src/data/changelog.ts
+File updated: <path>
 ```
 
 ## Error Handling
 
-- **No commits found:** "No new commits since last changelog entry. You're all caught up!"
-- **All commits filtered:** "All recent commits are internal/automated. Nothing to add to the changelog."
+- **Script returns `ERROR=`:** Display the message directly to the user
 - **Can't parse version:** "Could not parse the last version number. Please check the changelog format."
 - **No changelog file:** "No changelog file found. Would you like me to create one?"
 
@@ -297,21 +289,3 @@ export const changelogReleases: ChangelogRelease[] = []
 Adapt the import path to match the project's path alias conventions (check `tsconfig.json` for `paths` or `baseUrl`).
 
 After creating the files, proceed with generating the first changelog entry.
-
-## Impact Guidelines
-
-### `minor` impact — notable changes users will notice:
-- New features and capabilities
-- Significant UI/UX improvements
-- Major design changes
-
-### `patch` impact — smaller changes:
-- Bug fixes
-- Minor polish and tweaks
-- Performance improvements
-- Small UI adjustments
-
-### `major` impact — rare, breaking changes:
-- Complete UI overhauls
-- Removed features
-- Fundamental workflow changes
