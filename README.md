@@ -6,7 +6,7 @@ A Claude Code skill that generates user-facing changelog entries from git commit
 
 - Parses git commits using conventional commit prefixes (`feat:`, `fix:`, `perf:`, `style:`, etc.)
 - Translates technical language into user-friendly descriptions
-- Calculates semantic versioning (MAJOR.MINOR.PATCH) automatically
+- Uses calendar versioning (YYYY.MM.DD) — version is always today's date
 - Groups all changes from the same day into one release (daily grouping)
 - Detects INSERT mode (new release) vs UPDATE mode (same-day merge)
 - **Preserves manual edits** when updating today's entry (merge strategy)
@@ -23,7 +23,7 @@ changelog-prep.sh (deterministic)     SKILL.md (Claude)
 | 1. Auto-detect changelog   |        | 1. Run prep script         |
 | 2. Find commit SHA boundary| stdout | 2. Review borderline commits|
 | 3. Filter by prefix        | -----> | 3. Translate to English    |
-| 4. Calculate version       |        | 4. Consolidate duplicates  |
+| 4. CalVer version (today)  |        | 4. Consolidate duplicates  |
 | 5. INSERT vs UPDATE mode   |        | 5. Cross-release dedup     |
 | 6. Output manifest         |        | 6. Merge existing (UPDATE) |
 +----------------------------+        | 7. Write changelog.ts      |
@@ -46,7 +46,7 @@ The skill generates:
 
 ```typescript
 {
-  version: '1.4.0',
+  version: '2025.10.20',
   date: '2025-10-20',
   summary: 'High-performance photo rendering and visual improvements',
   changes: [
@@ -150,7 +150,7 @@ interface ChangelogRelease {
 3. **Finds** the commit SHA boundary (the last commit that modified the changelog file)
 4. **Gets** git commits after that exact boundary point
 5. **Filters** into INCLUDED (auto-include) and REVIEW (needs Claude's judgment)
-6. **Calculates** the new semantic version based on change types
+6. **Sets** version to today's date in CalVer format (YYYY.MM.DD)
 7. **Outputs** a structured manifest to stdout
 
 ### Claude (creative)
@@ -182,10 +182,10 @@ This is immune to date-overlap issues. If the changelog was updated twice on the
 The skill enforces **one release per day**. If you run `/changelog` multiple times on the same day, it merges all changes into a single release with a cumulatively calculated version:
 
 ```
-Morning:  feat commit  -> v1.3.0
-Afternoon: fix commit  -> v1.3.1
-Evening:  feat commit  -> v1.4.0
-Result: Single release v1.4.0 with all 3 changes
+Morning:  feat commit  -> v2026.03.20
+Afternoon: fix commit  -> v2026.03.20 (merged)
+Evening:  feat commit  -> v2026.03.20 (merged)
+Result: Single release v2026.03.20 with all 3 changes
 ```
 
 In UPDATE mode, manual edits to existing entries are preserved.

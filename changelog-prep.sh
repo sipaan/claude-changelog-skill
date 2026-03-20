@@ -39,12 +39,12 @@ fi
 
 # ── 2. Parse last version + date ─────────────────────────────────────────────
 
-LAST_VERSION=$(grep -m1 "version:" "$CHANGELOG" | sed "s/.*'\([^']*\)'.*/\1/" || echo "")
-LAST_DATE=$(grep -m1 "date:" "$CHANGELOG" | sed "s/.*'\([^']*\)'.*/\1/" || echo "")
+LAST_VERSION=$(grep -m1 "version:.*'" "$CHANGELOG" | sed "s/.*'\([^']*\)'.*/\1/" || echo "")
+LAST_DATE=$(grep -m1 "date:.*'" "$CHANGELOG" | sed "s/.*'\([^']*\)'.*/\1/" || echo "")
 
 if [[ -z "$LAST_VERSION" ]]; then
   # Empty changelog array - first run
-  LAST_VERSION="0.0.0"
+  LAST_VERSION=""
   LAST_DATE=""
 fi
 
@@ -120,7 +120,9 @@ if [[ -z "$INCLUDED" && -z "$REVIEW" ]]; then
   exit 0
 fi
 
-# ── 7. Calculate version bump ────────────────────────────────────────────────
+# ── 7. Classify change impact ────────────────────────────────────────────────
+# BUMP is informational only — used by the skill for impact classification.
+# It does NOT affect the version string (CalVer = today's date).
 
 BUMP="patch"
 if [[ -n "$INCLUDED" ]]; then
@@ -131,12 +133,7 @@ if [[ -n "$INCLUDED" ]]; then
   fi
 fi
 
-IFS='.' read -r MAJ MIN PAT <<< "$LAST_VERSION"
-case "$BUMP" in
-  major) NEW_VERSION="$((MAJ + 1)).0.0" ;;
-  minor) NEW_VERSION="${MAJ}.$((MIN + 1)).0" ;;
-  patch) NEW_VERSION="${MAJ}.${MIN}.$((PAT + 1))" ;;
-esac
+NEW_VERSION=$(date +%Y.%m.%d)
 
 # ── 8. Determine INSERT vs UPDATE ────────────────────────────────────────────
 
@@ -153,7 +150,7 @@ echo "CHANGELOG_FILE=${CHANGELOG}"
 echo "MODE=${MODE}"
 echo "LAST_VERSION=${LAST_VERSION}"
 echo "NEW_VERSION=${NEW_VERSION}"
-echo "BUMP=${BUMP}"
+echo "IMPACT=${BUMP}"
 echo "TODAY=${TODAY}"
 echo "LAST_DATE=${LAST_DATE}"
 echo "BOUNDARY_SHA=${BOUNDARY_SHA}"

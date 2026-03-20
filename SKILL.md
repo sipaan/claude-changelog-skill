@@ -1,6 +1,6 @@
 ---
 name: changelog
-description: Generate user-facing changelog entries from git commits with semantic versioning and daily grouping. Translates technical commits into clear, user-friendly descriptions for a TypeScript changelog data file. Use this skill when the user asks to update the changelog, document recent changes, prepare a release, or after finishing a series of commits. Also use when you detect significant work has been completed and changes should be logged - in that case, propose entries and ask for confirmation before writing.
+description: Generate user-facing changelog entries from git commits with calendar versioning (YYYY.MM.DD) and daily grouping. Translates technical commits into clear, user-friendly descriptions for a TypeScript changelog data file. Use this skill when the user asks to update the changelog, document recent changes, prepare a release, or after finishing a series of commits. Also use when you detect significant work has been completed and changes should be logged - in that case, propose entries and ask for confirmation before writing.
 argument-hint: "[--preview] [day|week|month|<N>d|--since-tag <tag>]"
 ---
 
@@ -15,7 +15,7 @@ changelog-prep.sh (deterministic)    SKILL.md (Claude)
 ┌──────────────────────────┐         ┌──────────────────────────┐
 │ Commit boundary (SHA)    │         │ Translate to plain English│
 │ Filter by prefix         │ ─────>  │ Consolidate duplicates   │
-│ Calculate version        │ stdout  │ Cross-release dedup      │
+│ CalVer version (today)   │ stdout  │ Cross-release dedup      │
 │ INSERT vs UPDATE mode    │         │ Merge existing (UPDATE)  │
 │ Structured manifest      │         │ Write changelog.ts       │
 └──────────────────────────┘         └──────────────────────────┘
@@ -33,9 +33,9 @@ Parse the manifest output. The format is:
 ```
 CHANGELOG_FILE=<path>
 MODE=INSERT|UPDATE
-LAST_VERSION=X.Y.Z
-NEW_VERSION=X.Y.Z
-BUMP=major|minor|patch
+LAST_VERSION=YYYY.MM.DD
+NEW_VERSION=YYYY.MM.DD
+IMPACT=major|minor|patch
 TODAY=YYYY-MM-DD
 LAST_DATE=YYYY-MM-DD
 BOUNDARY_SHA=<sha>
@@ -145,7 +145,7 @@ In INSERT mode, skip this step entirely - just use the translated entries.
 
 ## Step 7: Impact Classification
 
-Each change needs an `impact` field:
+Each change needs an `impact` field for **display ordering** (not version bumping — CalVer versions are always today's date):
 
 ### `minor` impact - notable changes users will notice:
 - New features and capabilities
@@ -183,14 +183,14 @@ Changes within each release **must** be sorted:
 
 ```typescript
 {
-  version: 'X.Y.Z',       // NEW_VERSION from manifest
-  date: 'YYYY-MM-DD',     // TODAY from manifest
-  summary: '...',          // From Step 8
+  version: 'YYYY.MM.DD',    // NEW_VERSION from manifest (today's date)
+  date: 'YYYY-MM-DD',       // TODAY from manifest
+  summary: '...',            // From Step 8
   changes: [
     {
       type: 'feature',        // 'feature' | 'fix' | 'improvement' | 'design'
       description: '...',     // User-friendly description from Step 3
-      impact: 'minor'         // 'major' | 'minor' | 'patch'
+      impact: 'minor'         // 'major' | 'minor' | 'patch' (display ordering)
     }
   ]
 }
@@ -209,7 +209,7 @@ Replace the first entry in the array (today's existing entry) with the merged re
 
 ### Validation before writing:
 - TypeScript syntax is valid
-- Version format is `X.Y.Z`
+- Version format matches `YYYY.MM.DD` (regex: `^\d{4}\.\d{2}\.\d{2}$`)
 - Date format is `YYYY-MM-DD`
 - All single quotes properly escaped in descriptions
 - Change types are valid (`feature`, `fix`, `improvement`, `design`)
@@ -221,7 +221,7 @@ Replace the first entry in the array (today's existing entry) with the merged re
 Changelog updated!
 
 Mode: INSERT (new release)
-Version: vX.Y.Z (BUMP_TYPE bump - reason)
+Version: vYYYY.MM.DD
 Date: YYYY-MM-DD
 Summary: ...
 
@@ -237,7 +237,7 @@ File updated: <path>
 Changelog updated!
 
 Mode: UPDATE (merged into today's release)
-Version: vX.Y.Z (cumulative for today)
+Version: vYYYY.MM.DD
 Date: YYYY-MM-DD
 
 Change diff:
