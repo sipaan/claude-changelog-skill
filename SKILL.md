@@ -79,6 +79,9 @@ Users see this changelog in the app. Write for humans, not developers.
 | `refactor:` (user-visible) | `improvement` |
 | `style:`, `ui:`, `design:` | `design` |
 
+### DO NOT use:
+- Em dashes (—). Use a regular hyphen-minus (-) instead for separators in descriptions
+
 ### DO NOT mention:
 - Component names (e.g., `PhotoGrid`, `UserModal`, `Sidebar`)
 - Libraries or frameworks (e.g., `React`, `HeroUI`, `Zustand`, `TanStack`)
