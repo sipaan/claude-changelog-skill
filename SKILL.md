@@ -65,19 +65,46 @@ For each commit in REVIEW:
 Users see this changelog in the app. Write for humans, not developers.
 
 ### Rules:
-- Focus on what users **see, experience, or can do**
-- Use past tense: "Added", "Fixed", "Improved"
-- Target 10-20 words per description
+- **Write factual changelog statements, not feature specs.** State what changed and what it does. Cut implementation details that don't help the reader understand the change. If the benefit is obvious from the statement, don't spell it out.
+- Pattern: `[Subject] [verb] [what changed]` - target 10-20 words
 - Be specific and concrete
+- Trim filler words - every word should earn its place
+- Don't cram multiple changes into one entry - if two things changed, make two entries
 
 ### Commit prefix to change type mapping:
 | Prefix | Change Type |
 |--------|------------|
-| `feat:` | `feature` |
+| `feat:` | `feature` (but see Feature History Check below) |
 | `fix:` | `fix` |
 | `perf:` | `improvement` |
 | `refactor:` (user-visible) | `improvement` |
 | `style:`, `ui:`, `design:` | `design` |
+
+### Feature History Check (overrides prefix mapping)
+
+After initial type assignment, read ALL prior releases in the changelog file (not just the previous one). For each `feat:` commit tagged as `feature`, check if the same capability already appears as a `feature` entry in ANY prior release.
+
+**Match by topic, not exact wording.** Extract the core noun/capability (e.g., "compare mode", "export", "recent folders", "badges") and search for it across all prior `feature` entries.
+
+- If a prior release already logged the same capability as `feature`: **downgrade to `improvement`**. The new commit enhances an existing feature, it doesn't introduce one.
+- If no prior release mentions this capability: keep as `feature`.
+
+Examples:
+```
+Prior release has: "Compare mode in lightbox - view two photos side-by-side"
+New commit: "feat: Lightroom-style compare mode with per-panel controls"
+-> Type becomes `improvement`, not `feature` (compare mode already existed)
+
+Prior release has: "Recent folders - switch between 5 folders from the welcome page"
+New commit: "feat: Folder picker dropdown in navbar with 10 recent folders"
+-> Type becomes `improvement` (recent folders already existed, now more accessible)
+
+No prior release mentions "Quick Cull" or "Tinder mode"
+New commit: "feat: Add Quick Cull for forced-decision photo culling"
+-> Stays `feature` (genuinely new capability)
+```
+
+This check applies regardless of how far back the prior release is - a feature introduced months ago is still not "new" when enhanced today.
 
 ### DO NOT use:
 - Em dashes (—). Use a regular hyphen-minus (-) instead for separators in descriptions
@@ -92,6 +119,7 @@ Users see this changelog in the app. Write for humans, not developers.
 
 ### Translation examples:
 
+**Stripping developer language:**
 ```
 feat: Add TanStack Virtual to PhotoGrid component
 -> "High-performance rendering for large photo collections"
@@ -101,19 +129,32 @@ fix: Resolve Zustand reactivity bug in cacheStore
 
 perf: Optimize LRU cache eviction strategy
 -> "Faster thumbnail loading with improved memory usage"
+```
 
-style: Update HeroUI Button design tokens
--> "Refreshed button design with modern styling"
+**Writing style - avoid feature specs and marketing copy:**
+```
+Feature spec (avoid):  "Confirmation screen before bulk date repairs showing which photos will be changed"
+Marketing copy (avoid): "See exactly which photos will be affected before running a bulk repair"
+Changelog statement:    "Bulk date repair shows a preview of affected photos before applying"
 
-feat: Implement JWT refresh token rotation
--> "Longer login sessions without interruptions"
+Feature spec (avoid):  "Adaptive info panel shows parsed dates, file info, and export preview instead of empty fields for non-camera photos"
+Changelog statement:    "Info panel shows parsed dates and file info for non-camera photos instead of empty fields"
+
+Too verbose (avoid):   "Photos from WhatsApp and other apps now recover their time from the file modified date, or use the filename sequence number to keep the correct order"
+Changelog statement:    "WhatsApp and app photos now recover their time for correct gallery order"
+
+Laundry list (avoid):  "Compare mode upgraded to Lightroom-style layout with per-panel star ratings, Keep/Bin buttons, EXIF metadata, Swap (X key), and multi-undo support"
+Changelog statement:    "Compare mode upgraded to Lightroom-style layout with independent controls per panel"
+
+Too wordy (avoid):     "Thumbnails no longer silently disappear when background cache maintenance runs during loading"
+Changelog statement:    "Thumbnails no longer disappear during background cache maintenance"
 ```
 
 ## Step 4: Anti-Duplication (Within Release)
 
 When multiple commits describe the same feature or change, consolidate them into a single entry.
 
-**Detection rule:** If commit A introduces feature X, and commit B modifies/redesigns/fixes feature X, merge them into ONE entry describing the complete feature.
+**Rule 1 - Same feature, multiple commits:** If commit A introduces feature X, and commit B modifies/redesigns/fixes feature X, merge them into ONE entry describing the complete feature.
 
 Example:
 ```
@@ -123,15 +164,32 @@ ui: Improve dark mode transition
 -> ONE entry: "Dark mode with smooth transitions and persistent preferences"
 ```
 
+**Rule 2 - Detail of a larger entry:** If an entry describes a minor UI placement or sub-detail of a bigger entry in the same release, absorb it into the parent entry rather than listing it separately. A standalone entry should describe a capability the user would independently care about.
+
+Example:
+```
+feat: Smart Export with date-based organization and file renaming
+feat: Export button in the top navigation bar for quick access
+-> ONE entry: The nav button is just where the export feature lives, not a separate capability. Absorb into the Smart Export entry.
+
+feat: Smart Export with date-based organization
+feat: Reusable export profiles for one-click exports
+-> TWO entries: Export profiles are a distinct capability users would independently value.
+```
+
+**Rule 3 - Same-day design of a new feature:** If a feature is introduced AND its design is polished on the same day, the design entry is part of the feature's initial release. Do not list a separate `design` entry for it. Only list `design` entries for redesigns of previously shipped features.
+
 ## Step 5: Cross-Release Deduplication
 
 **CRITICAL: This prevents the duplicate bug.**
 
-Read the **previous release's** entries from the changelog file. For each candidate new entry, check if it describes the same user-visible change as an existing entry in the prior release.
+Read **ALL existing releases** from the changelog file. For each candidate new entry, check if it describes the same user-visible change as an existing entry in ANY prior release.
 
 If a candidate is semantically the same as a previous release entry: **exclude it**.
 
-This catches edge cases where commits straddle changelog updates on the same day. The prep script's commit-SHA boundary prevents most duplicates, but this is the safety net.
+This catches two cases:
+1. Commits that straddle changelog updates on the same day (the prep script's SHA boundary prevents most, but this is the safety net).
+2. Features that were developed across multiple sessions/days - if the same capability was already logged in a release from days or weeks ago, don't log it again.
 
 ## Step 6: Merge Logic (UPDATE Mode Only)
 
