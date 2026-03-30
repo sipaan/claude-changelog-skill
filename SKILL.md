@@ -80,9 +80,37 @@ Users see this changelog in the app. Write for humans, not developers.
 | `refactor:` (user-visible) | `improvement` |
 | `style:`, `ui:`, `design:` | `design` |
 
-### Feature History Check (overrides prefix mapping)
+### Feature Classification Gate (overrides prefix mapping)
 
-After initial type assignment, read ALL prior releases in the changelog file (not just the previous one). For each `feat:` commit tagged as `feature`, check if the same capability already appears as a `feature` entry in ANY prior release.
+Before checking history, ask a threshold question for every `feat:` commit:
+
+**"Could the user already do or see this before this commit?"**
+
+- If **yes, but in a different place**: type is `design` (relocation, not new capability)
+- If **yes, but with different parameters/timing**: type is `improvement` (tuning, not new capability)
+- If **no, this is genuinely new**: proceed to History Check below
+
+Examples of relocation → `design`:
+```
+feat: move kept/binned counts to sidebar
+-> Counts already existed in the topbar. This is `design` (relocated UI element).
+
+feat: add export button to navbar
+-> If export already existed elsewhere, this is `design`. If export is brand new, it's `feature`.
+```
+
+Examples of tuning → `improvement`:
+```
+feat: more frequent milestones and longer display time
+-> Milestones already existed. Changing frequency/duration is `improvement`.
+
+feat: increase recent folders limit from 5 to 10
+-> Recent folders already existed. Expanding a limit is `improvement`.
+```
+
+### Feature History Check (further override for remaining `feature` entries)
+
+After the Classification Gate, for any commits still typed as `feature`, read ALL prior releases in the changelog file (not just the previous one). Check if the same capability already appears as a `feature` entry in ANY prior release.
 
 **Match by topic, not exact wording.** Extract the core noun/capability (e.g., "compare mode", "export", "recent folders", "badges") and search for it across all prior `feature` entries.
 
