@@ -1,3 +1,5 @@
+> **Frozen.** This skill is now maintained in a private repository. This copy is frozen as of 2026-10-31 and will not get updates.
+
 # Changelog Skill for Claude Code
 
 A Claude Code skill that generates user-facing changelog entries from git commits. Uses a **hybrid architecture**: a deterministic bash script handles mechanical work (commit range, filtering, version calculation), Claude handles creative work (translation, consolidation, summary).
